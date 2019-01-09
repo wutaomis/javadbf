@@ -28,6 +28,7 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
@@ -60,26 +61,12 @@ public final class DBFUtils {
 	 * @throws EOFException if reached end of file before length bytes
 	 */
 	public static Number readNumericStoredAsText(DataInputStream dataInput, int length) throws IOException {
-		try {
-			byte t_float[] = new byte[length];
-			int readed = dataInput.read(t_float);
-			if (readed != length) {
-				throw new EOFException("failed to read:" + length + " bytes");
-			}
-			t_float = DBFUtils.removeSpaces(t_float);
-			t_float = DBFUtils.removeNullBytes(t_float);
-			if (t_float.length > 0 && DBFUtils.isPureAscii(t_float) && !DBFUtils.contains(t_float, (byte) '?') && !DBFUtils.contains(t_float, (byte) '*')) {
-				String aux = new String(t_float, StandardCharsets.US_ASCII).replace(',', '.');
-				if (".".equals(aux)) {
-					return BigDecimal.ZERO;
-				}
-				return new BigDecimal(aux);
-			} else {
-				return null;
-			}
-		} catch (NumberFormatException e) {
-			throw new DBFException("Failed to parse Float: " + e.getMessage(), e);
+		byte t_float[] = new byte[length];
+		int readed = dataInput.read(t_float);
+		if (readed != length) {
+			throw new EOFException("failed to read:" + length + " bytes");
 		}
+		return toNumeric(t_float);
 	}
 
 	/**
@@ -357,6 +344,64 @@ public final class DBFUtils {
 				// nop
 			}
 		}
+	}
+
+	/**
+	 * Convert to Numeric object from byte array
+	 * @param t_float byte array
+	 * @return the Numeric object if successful, otherwise throw DBFException
+	 */
+	public static Number toNumeric(byte [] t_float) {
+		try {
+			t_float = DBFUtils.removeSpaces(t_float);
+			t_float = DBFUtils.removeNullBytes(t_float);
+			if (t_float.length > 0 && DBFUtils.isPureAscii(t_float) && !DBFUtils.contains(t_float, (byte) '?') &&
+					!DBFUtils.contains(t_float, (byte) '*')) {
+				String aux = new String(t_float, StandardCharsets.US_ASCII).replace(',', '.');
+				if (".".equals(aux)) {
+					return BigDecimal.ZERO;
+				}
+				return new BigDecimal(aux);
+			} else {
+				throw new DBFException("Invalid byte array, can not be converted to Number");
+			}
+		} catch (NumberFormatException e) {
+			throw new DBFException("Failed to parse float: " + e.getMessage(), e);
+		}
+	}
+
+	/**
+	 * Convert to int from byte array
+	 * @param t_littleEndianInt byte array
+	 * @return integer value if successful, otherwise throw DBFException
+	 */
+	public static int toLittleEndianInt(byte[] t_littleEndianInt){
+		int bigEndian = 0;
+		if (t_littleEndianInt == null || t_littleEndianInt.length != 4) {
+			throw new DBFException("Invalid byte array, can not be converted to int");
+		}
+		for (int i =  0 ; i < t_littleEndianInt.length ; i ++)
+		{
+			bigEndian |= (t_littleEndianInt[i] & 0xff) << (i*8);
+		}
+		return bigEndian;
+	}
+
+	/**
+	 * Convert to Double object from byte array
+	 * @param t_double byte array
+	 * @return Double object if successful, otherwise throw DBFException
+	 */
+	public static Object toDouble(byte[] t_double) {
+
+		if (t_double == null || t_double.length != 8) {
+			throw new DBFException("Invalid byte array, can not be converted to double");
+		}
+		return ByteBuffer.wrap(
+				new byte[]{
+						t_double[7], t_double[6], t_double[5], t_double[4],
+						t_double[3], t_double[2], t_double[1], t_double[0]
+				}).getDouble();
 	}
 
 }
