@@ -363,7 +363,7 @@ public final class DBFUtils {
 				}
 				return new BigDecimal(aux);
 			} else {
-				throw new DBFException("Invalid byte array, can not be converted to Number");
+				return null;
 			}
 		} catch (NumberFormatException e) {
 			throw new DBFException("Failed to parse float: " + e.getMessage(), e);

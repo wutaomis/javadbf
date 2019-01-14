@@ -182,8 +182,7 @@ public class DBFHeader {
 		dataOutput.writeByte(this.month); /* 2 */
 		dataOutput.writeByte(this.day); /* 3 */
 
-		this.numberOfRecords = DBFUtils.littleEndian(this.numberOfRecords);
-		dataOutput.writeInt(this.numberOfRecords); /* 4-7 */
+		dataOutput.writeInt(DBFUtils.littleEndian(this.numberOfRecords)); /* 4-7 */
 
 		short oldHeaderLength = this.headerLength;
 		short newHeaderLength = findHeaderLength();

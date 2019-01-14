@@ -71,6 +71,7 @@ public final class DBFRandomAccess extends DBFBase implements Closeable {
 
             // position file pointer will be at the end of header after this
             this.header.read(this.raf, charset, false);
+            this.raf.seek(this.header.headerLength);
 
         } catch (FileNotFoundException e) {
             throw new DBFException("Specified file is not found. " + e.getMessage(), e);
@@ -119,6 +120,19 @@ public final class DBFRandomAccess extends DBFBase implements Closeable {
         for (int i = 0; i < fields.length; i++) {
             this.header.fieldArray[i] = new DBFField(fields[i]);
         }
+
+        List<DBFField> userFields = new ArrayList<>();
+        if (this.showDeletedRows) {
+            DBFField deletedField = new DBFField("deleted", DBFDataType.LOGICAL);
+            userFields.add(deletedField);
+        }
+        for (DBFField field1: this.header.fieldArray) {
+            if (!field1.isSystem()) {
+                userFields.add(field1);
+            }
+        }
+        this.header.userFieldArray = userFields.toArray(new DBFField[userFields.size()]);
+
         try {
             if (this.raf != null && this.raf.length() == 0) {
                 // this is a new/non-existent file. So write header before proceeding
@@ -279,7 +293,7 @@ public final class DBFRandomAccess extends DBFBase implements Closeable {
      * @throws IOException write DBF exception
      */
     public void updateRecord(int recordIndex, Object[] objectArray) throws IOException {
-        this.raf.write((byte) ' ');
+
         for (int i = 0; i < this.header.fieldArray.length; i++) {
             /* iterate through all fields */
             this.updateRecord(recordIndex,i, objectArray[i]);
@@ -344,8 +358,9 @@ public final class DBFRandomAccess extends DBFBase implements Closeable {
     /**
      * Add a record.
      * @param values fields of the record
+     * @throws IOException if appending record fails
      */
-    public void addRecord(Object[] values) {
+    public void addRecord(Object[] values) throws IOException{
 
         if (this.closed) {
             throw new IllegalStateException("You can add records a closed DBFRandomAccess");
@@ -363,6 +378,9 @@ public final class DBFRandomAccess extends DBFBase implements Closeable {
         }
 
         int nOffset = this.header.headerLength + this.header.recordLength * this.recordCount;
+        this.raf.seek(nOffset);
+        this.raf.write((byte) ' ');
+        nOffset ++;
         for (int i = 0; i < this.header.fieldArray.length; i++) {
             try {
                 writeToDBF(nOffset, this.header.fieldArray[i], values[i]);
@@ -372,6 +390,13 @@ public final class DBFRandomAccess extends DBFBase implements Closeable {
             }
         }
         this.recordCount++;
+        //add END_OF_DATA mark
+        this.raf.writeByte(END_OF_DATA);
+
+        //update record number in header
+        this.header.numberOfRecords = this.recordCount;
+        this.raf.seek(0);
+        this.header.write(this.raf);
     }
 
     private Object getFieldValue(DBFField field, byte[] byteRecords, int offset) {
@@ -617,23 +642,8 @@ public final class DBFRandomAccess extends DBFBase implements Closeable {
         }
         this.closed = true;
         if (this.raf != null) {
-            /*
-             * everything is written already. just update the header for
-             * record count and the END_OF_DATA mark
-             */
-            try {
-                this.header.numberOfRecords = this.recordCount;
-                this.raf.seek(0);
-                this.header.write(this.raf);
-                this.raf.seek(this.raf.length());
-                this.raf.writeByte(END_OF_DATA);
-            }
-            catch (IOException e) {
-                throw new DBFException(e.getMessage(), e);
-            }
-            finally {
-                DBFUtils.close(this.raf);
-            }
+            DBFUtils.close(this.raf);
+            this.raf = null;
         }
     }
 }
